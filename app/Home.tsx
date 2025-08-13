@@ -1,15 +1,15 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useMutation, useQuery } from 'convex/react';
-import * as Notifications from 'expo-notifications';
 import { StatusBar } from 'expo-status-bar';
-import { useEffect, useRef, useState } from 'react';
+import { useState } from 'react';
 import {
-    Alert,
+    ActivityIndicator,
     FlatList,
     KeyboardAvoidingView,
     Modal,
     Platform,
-    SafeAreaView,
+    Pressable,
+    ScrollView,
     StyleSheet,
     Text,
     TextInput,
@@ -20,13 +20,13 @@ import { api } from '../convex/_generated/api';
 import { Id } from '../convex/_generated/dataModel';
 
 // Configure notifications
-Notifications.setNotificationHandler({
-    handleNotification: async () => ({
-        shouldShowAlert: true,
-        shouldPlaySound: true,
-        shouldSetBadge: false,
-    }),
-});
+// Notifications.setNotificationHandler({
+//     handleNotification: async () => ({
+//         shouldShowAlert: true,
+//         shouldPlaySound: true,
+//         shouldSetBadge: false,
+//     }),
+// });
 
 // Task interface
 interface Task {
@@ -46,8 +46,8 @@ export default function HomeScreen() {
     const [editingTask, setEditingTask] = useState<Task | null>(null);
     const [taskPriority, setTaskPriority] = useState<Priority>('medium');
     const [priorityModalVisible, setPriorityModalVisible] = useState(false);
-    const notificationListener = useRef<any>();
-    const responseListener = useRef<any>();
+    // const notificationListener = useRef<any>();
+    // const responseListener = useRef<any>();
 
     // Fetch tasks from Convex
     const tasks = useQuery(api.tasks.getTasks, {}) || [];
@@ -73,66 +73,66 @@ export default function HomeScreen() {
     const deleteTaskMutation = useMutation(api.tasks.deleteTask);
 
     // Request notification permissions
-    useEffect(() => {
-        registerForPushNotificationsAsync();
+    // useEffect(() => {
+    //     registerForPushNotificationsAsync();
 
-        // Set up notification listeners
-        notificationListener.current = Notifications.addNotificationReceivedListener(notification => {
-            console.log('Notification received:', notification);
-        });
+    //     // Set up notification listeners
+    //     notificationListener.current = Notifications.addNotificationReceivedListener(notification => {
+    //         console.log('Notification received:', notification);
+    //     });
 
-        responseListener.current = Notifications.addNotificationResponseReceivedListener(response => {
-            console.log('Notification response:', response);
-        });
+    //     responseListener.current = Notifications.addNotificationResponseReceivedListener(response => {
+    //         console.log('Notification response:', response);
+    //     });
 
-        return () => {
-            Notifications.removeNotificationSubscription(notificationListener.current);
-            Notifications.removeNotificationSubscription(responseListener.current);
-        };
-    }, []);
+    //     return () => {
+    //         Notifications.removeNotificationSubscription(notificationListener.current);
+    //         Notifications.removeNotificationSubscription(responseListener.current);
+    //     };
+    // }, []);
 
     // Request notification permissions
-    async function registerForPushNotificationsAsync() {
-        const { status: existingStatus } = await Notifications.getPermissionsAsync();
-        let finalStatus = existingStatus;
+    // async function registerForPushNotificationsAsync() {
+    //     const { status: existingStatus } = await Notifications.getPermissionsAsync();
+    //     let finalStatus = existingStatus;
 
-        if (existingStatus !== 'granted') {
-            const { status } = await Notifications.requestPermissionsAsync();
-            finalStatus = status;
-        }
+    //     if (existingStatus !== 'granted') {
+    //         const { status } = await Notifications.requestPermissionsAsync();
+    //         finalStatus = status;
+    //     }
 
-        if (finalStatus !== 'granted') {
-            Alert.alert('Permission required', 'Push notifications need appropriate permissions.');
-            return;
-        }
-    }
+    //     if (finalStatus !== 'granted') {
+    //         Alert.alert('Permission required', 'Push notifications need appropriate permissions.');
+    //         return;
+    //     }
+    // }
 
     // Schedule a notification for a task
-    async function scheduleTaskReminder(taskText: string) {
-        try {
-            const notificationId = await Notifications.scheduleNotificationAsync({
-                content: {
-                    title: 'Task Reminder',
-                    body: `Time to complete: ${taskText}`,
-                },
-                trigger: { seconds: 60 }, // Reminder after 1 minute
-            });
+    // async function scheduleTaskReminder(taskText: string) {
+    //     try {
+    //         const notificationId = await Notifications.scheduleNotificationAsync({
+    //             content: {
+    //                 title: 'Task Reminder',
+    //                 body: `Time to complete: ${taskText}`,
+    //             },
+    //             trigger: { seconds: 60 }, // Reminder after 1 minute
+    //         });
 
-            return notificationId;
-        } catch (error) {
-            console.error('Error scheduling notification:', error);
-            return '';
-        }
-    }
+    //         return notificationId;
+    //     } catch (error) {
+    //         console.error('Error scheduling notification:', error);
+    //         return '';
+    //     }
+    // }
 
     // Cancel a scheduled notification
-    async function cancelNotification(notificationId: string) {
-        try {
-            await Notifications.cancelScheduledNotificationAsync(notificationId);
-        } catch (error) {
-            console.error('Error cancelling notification:', error);
-        }
-    }
+    // async function cancelNotification(notificationId: string) {
+    //     try {
+    //         await Notifications.cancelScheduledNotificationAsync(notificationId);
+    //     } catch (error) {
+    //         console.error('Error cancelling notification:', error);
+    //     }
+    // }
 
     // Add a new task
     const addTask = async () => {
@@ -141,14 +141,15 @@ export default function HomeScreen() {
         if (editingTask) {
             // Update existing task
             await updateTaskMutation({
-                id: editingTask._id,
+                id: editingTask?._id,
                 text: taskText,
                 priority: taskPriority,
             });
             setEditingTask(null);
         } else {
             // Create new task
-            const notificationId = await scheduleTaskReminder(taskText);
+            // const notificationId = await scheduleTaskReminder(taskText);
+            const notificationId = "";
             await createTask({
                 text: taskText,
                 notificationId,
@@ -162,36 +163,36 @@ export default function HomeScreen() {
 
     // Toggle task completion
     const toggleTaskCompletion = async (task: Task) => {
-        const newCompletedState = !task.completed;
+        const newCompletedState = !task?.completed;
 
         // If task is being marked as complete, cancel notification
-        if (newCompletedState && task.notificationId) {
-            await cancelNotification(task.notificationId);
+        if (newCompletedState && task?.notificationId) {
+            // await cancelNotification(task?.notificationId);
         }
 
         await updateTaskMutation({
-            id: task._id,
+            id: task?._id,
             completed: newCompletedState,
             // Clear notification ID if task is completed
-            notificationId: newCompletedState ? '' : task.notificationId,
+            notificationId: newCompletedState ? '' : task?.notificationId,
         });
     };
 
     // Delete a task
     const deleteTask = async (task: Task) => {
-        if (task.notificationId) {
-            await cancelNotification(task.notificationId);
+        if (task?.notificationId) {
+            // await cancelNotification(task?.notificationId);
         }
 
         await deleteTaskMutation({
-            id: task._id,
+            id: task?._id,
         });
     };
 
     // Edit a task
     const editTask = (task: Task) => {
-        setTaskText(task.text);
-        setTaskPriority((task.priority as Priority) || 'medium');
+        setTaskText(task?.text);
+        setTaskPriority((task?.priority as Priority) || 'medium');
         setEditingTask(task);
     };
 
@@ -289,7 +290,7 @@ export default function HomeScreen() {
     );
 
     return (
-        <SafeAreaView style={styles.container}>
+        <ScrollView contentContainerStyle={styles.container}>
             <StatusBar style="auto" />
 
             <View style={styles.header}>
@@ -320,7 +321,7 @@ export default function HomeScreen() {
                     <View style={styles.inputRow}>
                         <TextInput
                             style={styles.input}
-                            placeholder="Add a new task..."
+                            placeholder="Add a new task?..."
                             value={taskText}
                             onChangeText={setTaskText}
                             returnKeyType="done"
@@ -354,7 +355,7 @@ export default function HomeScreen() {
                 visible={priorityModalVisible}
                 onRequestClose={() => setPriorityModalVisible(false)}
             >
-                <View style={styles.modalOverlay}>
+                <Pressable style={styles.modalOverlay} onPress={() => setPriorityModalVisible(false)}>
                     <View style={styles.modalContent}>
                         <Text style={styles.modalTitle}>Select Priority</Text>
 
@@ -389,9 +390,9 @@ export default function HomeScreen() {
                             <Text style={styles.cancelButtonText}>Cancel</Text>
                         </TouchableOpacity>
                     </View>
-                </View>
+                </Pressable>
             </Modal>
-        </SafeAreaView>
+        </ScrollView>
     );
 }
 
