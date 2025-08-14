@@ -5,7 +5,7 @@ import { StyleSheet } from 'react-native';
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { Toaster } from 'sonner-native';
 
-const convex = new ConvexReactClient(process.env.EXPO_PUBLIC_CONVEX_URL);
+const convex = new ConvexReactClient(process.env.EXPO_PUBLIC_CONVEX_URL || "");
 
 export default function App() {
   return (
@@ -16,8 +16,8 @@ export default function App() {
           screenOptions={{
             headerShown: false
           }}
-          initialRouteName='Home'>
-          <Stack.Screen name="Home" />
+          initialRouteName='index'>
+          <Stack.Screen name="index" />
           <Stack.Screen name="+not-found" />
         </Stack>
         <StatusBar style="auto" />
