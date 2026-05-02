@@ -1,9 +1,8 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useMutation, useQuery } from 'convex/react';
 import { StatusBar } from 'expo-status-bar';
-import { useState, useCallback } from 'react';
+import { useCallback, useState } from 'react';
 import {
-    ActivityIndicator,
     FlatList,
     KeyboardAvoidingView,
     Modal,
@@ -14,9 +13,9 @@ import {
     Text,
     TextInput,
     TouchableOpacity,
-    View,
-    SafeAreaView
+    View
 } from 'react-native';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { toast } from 'sonner-native';
 import { api } from '../convex/_generated/api';
 import { Id } from '../convex/_generated/dataModel';
@@ -40,6 +39,7 @@ export default function HomeScreen() {
     const [taskPriority, setTaskPriority] = useState<Priority>('medium');
     const [priorityModalVisible, setPriorityModalVisible] = useState(false);
     const [refreshing, setRefreshing] = useState(false);
+    const insets = useSafeAreaInsets();
 
     // Fetch tasks from Convex
     const tasks = useQuery(api.tasks.getTasks, {}) || [];
@@ -201,7 +201,7 @@ export default function HomeScreen() {
     );
 
     return (
-        <SafeAreaView style={styles.container}>
+        <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
             <StatusBar style="light" />
 
             <View style={styles.header}>
@@ -217,9 +217,9 @@ export default function HomeScreen() {
             </View>
 
             <KeyboardAvoidingView
-                behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+                behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
                 style={styles.content}
-                keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
+                keyboardVerticalOffset={Platform.OS === 'ios' ? 100 : 0}
             >
                 <FlatList
                     data={sortedTasks}
@@ -245,7 +245,7 @@ export default function HomeScreen() {
                     }
                 />
 
-                <View style={styles.inputWrapper}>
+                <View style={[styles.inputWrapper, { paddingBottom: Math.max(insets.bottom, 20) }]}>
                     <View style={styles.inputContainer}>
                         <TextInput
                             style={styles.input}
@@ -311,7 +311,7 @@ const styles = StyleSheet.create({
         backgroundColor: '#4A90E2',
         paddingHorizontal: 20,
         paddingBottom: 25,
-        paddingTop: Platform.OS === 'android' ? 40 : 10,
+        paddingTop: 10,
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
@@ -397,7 +397,6 @@ const styles = StyleSheet.create({
     },
     inputWrapper: {
         padding: 20,
-        paddingBottom: Platform.OS === 'ios' ? 20 : 20,
         backgroundColor: 'white',
         borderTopWidth: 1,
         borderTopColor: '#F0F2F5',
