@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useMutation, useQuery } from 'convex/react';
 import { StatusBar } from 'expo-status-bar';
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import {
     ActivityIndicator,
     FlatList,
@@ -9,24 +9,17 @@ import {
     Modal,
     Platform,
     Pressable,
-    ScrollView,
+    RefreshControl,
     StyleSheet,
     Text,
     TextInput,
     TouchableOpacity,
-    View
+    View,
+    SafeAreaView
 } from 'react-native';
+import { toast } from 'sonner-native';
 import { api } from '../convex/_generated/api';
 import { Id } from '../convex/_generated/dataModel';
-
-// Configure notifications
-// Notifications.setNotificationHandler({
-//     handleNotification: async () => ({
-//         shouldShowAlert: true,
-//         shouldPlaySound: true,
-//         shouldSetBadge: false,
-//     }),
-// });
 
 // Task interface
 interface Task {
@@ -46,24 +39,19 @@ export default function HomeScreen() {
     const [editingTask, setEditingTask] = useState<Task | null>(null);
     const [taskPriority, setTaskPriority] = useState<Priority>('medium');
     const [priorityModalVisible, setPriorityModalVisible] = useState(false);
-    // const notificationListener = useRef<any>();
-    // const responseListener = useRef<any>();
+    const [refreshing, setRefreshing] = useState(false);
 
     // Fetch tasks from Convex
     const tasks = useQuery(api.tasks.getTasks, {}) || [];
 
     // Sort tasks by priority and completion status
     const sortedTasks = [...tasks].sort((a, b) => {
-        // First sort by completion status (incomplete first)
         if (a.completed !== b.completed) {
             return a.completed ? 1 : -1;
         }
-
-        // Then sort by priority
         const priorityOrder = { high: 0, medium: 1, low: 2 };
         const aPriority = a.priority || 'medium';
         const bPriority = b.priority || 'medium';
-
         return priorityOrder[aPriority as Priority] - priorityOrder[bPriority as Priority];
     });
 
@@ -72,169 +60,99 @@ export default function HomeScreen() {
     const updateTaskMutation = useMutation(api.tasks.updateTask);
     const deleteTaskMutation = useMutation(api.tasks.deleteTask);
 
-    // Request notification permissions
-    // useEffect(() => {
-    //     registerForPushNotificationsAsync();
+    const onRefresh = useCallback(() => {
+        setRefreshing(true);
+        setTimeout(() => {
+            setRefreshing(false);
+            toast.success('Tasks updated');
+        }, 1000);
+    }, []);
 
-    //     // Set up notification listeners
-    //     notificationListener.current = Notifications.addNotificationReceivedListener(notification => {
-    //         console.log('Notification received:', notification);
-    //     });
-
-    //     responseListener.current = Notifications.addNotificationResponseReceivedListener(response => {
-    //         console.log('Notification response:', response);
-    //     });
-
-    //     return () => {
-    //         Notifications.removeNotificationSubscription(notificationListener.current);
-    //         Notifications.removeNotificationSubscription(responseListener.current);
-    //     };
-    // }, []);
-
-    // Request notification permissions
-    // async function registerForPushNotificationsAsync() {
-    //     const { status: existingStatus } = await Notifications.getPermissionsAsync();
-    //     let finalStatus = existingStatus;
-
-    //     if (existingStatus !== 'granted') {
-    //         const { status } = await Notifications.requestPermissionsAsync();
-    //         finalStatus = status;
-    //     }
-
-    //     if (finalStatus !== 'granted') {
-    //         Alert.alert('Permission required', 'Push notifications need appropriate permissions.');
-    //         return;
-    //     }
-    // }
-
-    // Schedule a notification for a task
-    // async function scheduleTaskReminder(taskText: string) {
-    //     try {
-    //         const notificationId = await Notifications.scheduleNotificationAsync({
-    //             content: {
-    //                 title: 'Task Reminder',
-    //                 body: `Time to complete: ${taskText}`,
-    //             },
-    //             trigger: { seconds: 60 }, // Reminder after 1 minute
-    //         });
-
-    //         return notificationId;
-    //     } catch (error) {
-    //         console.error('Error scheduling notification:', error);
-    //         return '';
-    //     }
-    // }
-
-    // Cancel a scheduled notification
-    // async function cancelNotification(notificationId: string) {
-    //     try {
-    //         await Notifications.cancelScheduledNotificationAsync(notificationId);
-    //     } catch (error) {
-    //         console.error('Error cancelling notification:', error);
-    //     }
-    // }
-
-    // Add a new task
     const addTask = async () => {
         if (taskText.trim() === '') return;
 
-        if (editingTask) {
-            // Update existing task
-            await updateTaskMutation({
-                id: editingTask?._id,
-                text: taskText,
-                priority: taskPriority,
-            });
-            setEditingTask(null);
-        } else {
-            // Create new task
-            // const notificationId = await scheduleTaskReminder(taskText);
-            const notificationId = "";
-            await createTask({
-                text: taskText,
-                notificationId,
-                priority: taskPriority,
-            });
+        try {
+            if (editingTask) {
+                await updateTaskMutation({
+                    id: editingTask?._id,
+                    text: taskText,
+                    priority: taskPriority,
+                });
+                toast.success('Task updated');
+                setEditingTask(null);
+            } else {
+                await createTask({
+                    text: taskText,
+                    notificationId: "",
+                    priority: taskPriority,
+                });
+                toast.success('Task added');
+            }
+            setTaskText('');
+            setTaskPriority('medium');
+        } catch (error) {
+            toast.error('Failed to save task');
         }
-
-        setTaskText('');
-        setTaskPriority('medium');
     };
 
-    // Toggle task completion
     const toggleTaskCompletion = async (task: Task) => {
-        const newCompletedState = !task?.completed;
-
-        // If task is being marked as complete, cancel notification
-        if (newCompletedState && task?.notificationId) {
-            // await cancelNotification(task?.notificationId);
+        try {
+            const newCompletedState = !task?.completed;
+            await updateTaskMutation({
+                id: task?._id,
+                completed: newCompletedState,
+                notificationId: newCompletedState ? '' : task?.notificationId,
+            });
+            if (newCompletedState) {
+                toast.success('Task completed');
+            }
+        } catch (error) {
+            toast.error('Failed to update task');
         }
-
-        await updateTaskMutation({
-            id: task?._id,
-            completed: newCompletedState,
-            // Clear notification ID if task is completed
-            notificationId: newCompletedState ? '' : task?.notificationId,
-        });
     };
 
-    // Delete a task
     const deleteTask = async (task: Task) => {
-        if (task?.notificationId) {
-            // await cancelNotification(task?.notificationId);
+        try {
+            await deleteTaskMutation({
+                id: task?._id,
+            });
+            toast.success('Task deleted');
+        } catch (error) {
+            toast.error('Failed to delete task');
         }
-
-        await deleteTaskMutation({
-            id: task?._id,
-        });
     };
 
-    // Edit a task
     const editTask = (task: Task) => {
         setTaskText(task?.text);
         setTaskPriority((task?.priority as Priority) || 'medium');
         setEditingTask(task);
     };
 
-    // Update task priority
-    const updatePriority = async (priority: Priority) => {
+    const updatePriority = (priority: Priority) => {
         setTaskPriority(priority);
         setPriorityModalVisible(false);
     };
 
-    // Get priority color
     const getPriorityColor = (priority?: string) => {
         switch (priority) {
-            case 'high':
-                return '#FF3B30';
-            case 'medium':
-                return '#FF9500';
-            case 'low':
-                return '#34C759';
-            default:
-                return '#FF9500'; // Default to medium
+            case 'high': return '#FF3B30';
+            case 'medium': return '#FF9500';
+            case 'low': return '#34C759';
+            default: return '#FF9500';
         }
     };
 
-    // Get priority icon
     const getPriorityIcon = (priority?: string) => {
         switch (priority) {
-            case 'high':
-                return 'flag';
-            case 'medium':
-                return 'flag-outline';
-            case 'low':
-                return 'flag-outline';
-            default:
-                return 'flag-outline';
+            case 'high': return 'flag';
+            default: return 'flag-outline';
         }
     };
 
-    // Render a task item
     const renderTaskItem = ({ item }: { item: Task }) => (
         <View style={[
             styles.taskItem,
-            { borderLeftWidth: 4, borderLeftColor: getPriorityColor(item.priority) }
+            { borderLeftColor: getPriorityColor(item.priority) }
         ]}>
             <TouchableOpacity
                 style={styles.checkboxContainer}
@@ -242,7 +160,7 @@ export default function HomeScreen() {
             >
                 <View style={[
                     styles.checkbox,
-                    item.completed && styles.checkboxChecked
+                    item.completed && { backgroundColor: '#4A90E2', borderColor: '#4A90E2' }
                 ]}>
                     {item.completed && <Ionicons name="checkmark" size={16} color="white" />}
                 </View>
@@ -262,7 +180,7 @@ export default function HomeScreen() {
                 <View style={styles.priorityIndicator}>
                     <Ionicons
                         name={getPriorityIcon(item.priority)}
-                        size={14}
+                        size={12}
                         color={getPriorityColor(item.priority)}
                     />
                     <Text style={[styles.priorityText, { color: getPriorityColor(item.priority) }]}>
@@ -272,17 +190,10 @@ export default function HomeScreen() {
             </View>
 
             <View style={styles.taskActions}>
-                <TouchableOpacity
-                    style={styles.actionButton}
-                    onPress={() => editTask(item)}
-                >
-                    <Ionicons name="pencil" size={20} color="#4A90E2" />
+                <TouchableOpacity style={styles.actionButton} onPress={() => editTask(item)}>
+                    <Ionicons name="pencil-outline" size={20} color="#4A90E2" />
                 </TouchableOpacity>
-
-                <TouchableOpacity
-                    style={styles.actionButton}
-                    onPress={() => deleteTask(item)}
-                >
+                <TouchableOpacity style={styles.actionButton} onPress={() => deleteTask(item)}>
                     <Ionicons name="trash-outline" size={20} color="#FF3B30" />
                 </TouchableOpacity>
             </View>
@@ -290,67 +201,80 @@ export default function HomeScreen() {
     );
 
     return (
-        <ScrollView contentContainerStyle={styles.container}>
-            <StatusBar style="auto" />
+        <SafeAreaView style={styles.container}>
+            <StatusBar style="light" />
 
             <View style={styles.header}>
-                <Text style={styles.title}>My Tasks</Text>
+                <View>
+                    <Text style={styles.title}>My Tasks</Text>
+                    <Text style={styles.subtitle}>
+                        {tasks.length} {tasks.length === 1 ? 'task' : 'tasks'} remaining
+                    </Text>
+                </View>
+                <TouchableOpacity onPress={() => onRefresh()}>
+                    <Ionicons name="refresh-outline" size={24} color="white" />
+                </TouchableOpacity>
             </View>
 
             <KeyboardAvoidingView
-                behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-                style={styles.keyboardAvoidingContainer}
+                behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+                style={styles.content}
+                keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
             >
                 <FlatList
                     data={sortedTasks}
                     renderItem={renderTaskItem}
                     keyExtractor={item => item._id}
-                    style={styles.taskList}
                     contentContainerStyle={styles.taskListContent}
                     showsVerticalScrollIndicator={false}
+                    keyboardShouldPersistTaps="handled"
+                    refreshControl={
+                        <RefreshControl
+                            refreshing={refreshing}
+                            onRefresh={onRefresh}
+                            colors={['#4A90E2']}
+                            tintColor={'#4A90E2'}
+                        />
+                    }
                     ListEmptyComponent={
                         <View style={styles.emptyContainer}>
-                            <Ionicons name="list" size={60} color="#CCCCCC" />
-                            <Text style={styles.emptyText}>No tasks yet</Text>
-                            <Text style={styles.emptySubtext}>Add a task to get started</Text>
+                            <Ionicons name="clipboard-outline" size={80} color="#E0E0E0" />
+                            <Text style={styles.emptyText}>No tasks found</Text>
+                            <Text style={styles.emptySubtext}>Tap below to create your first task</Text>
                         </View>
                     }
                 />
 
-                <View style={styles.inputContainer}>
-                    <View style={styles.inputRow}>
+                <View style={styles.inputWrapper}>
+                    <View style={styles.inputContainer}>
                         <TextInput
                             style={styles.input}
-                            placeholder="Add a new task?..."
+                            placeholder="I want to..."
                             value={taskText}
                             onChangeText={setTaskText}
-                            returnKeyType="done"
+                            placeholderTextColor="#999"
                             onSubmitEditing={addTask}
+                            blurOnSubmit={false}
                         />
-
                         <TouchableOpacity
-                            style={[styles.priorityButton, { backgroundColor: getPriorityColor(taskPriority) }]}
+                            style={[styles.priorityBadge, { backgroundColor: getPriorityColor(taskPriority) + '20' }]}
                             onPress={() => setPriorityModalVisible(true)}
                         >
-                            <Ionicons name="flag" size={20} color="white" />
+                            <Ionicons name="flag" size={18} color={getPriorityColor(taskPriority)} />
                         </TouchableOpacity>
-
                         <TouchableOpacity
-                            style={styles.addButton}
+                            style={[styles.addButton, taskText.trim() === '' && styles.addButtonDisabled]}
                             onPress={addTask}
                             disabled={taskText.trim() === ''}
                         >
-                            <Text style={styles.addButtonText}>
-                                {editingTask ? 'Update' : 'Add'}
-                            </Text>
+                            <Ionicons name={editingTask ? "checkmark" : "add"} size={28} color="white" />
                         </TouchableOpacity>
                     </View>
                 </View>
             </KeyboardAvoidingView>
 
-            {/* Priority Selection Modal */}
             <Modal
-                animationType="slide"
+                animationType="fade"
                 transparent={true}
                 visible={priorityModalVisible}
                 onRequestClose={() => setPriorityModalVisible(false)}
@@ -358,228 +282,206 @@ export default function HomeScreen() {
                 <Pressable style={styles.modalOverlay} onPress={() => setPriorityModalVisible(false)}>
                     <View style={styles.modalContent}>
                         <Text style={styles.modalTitle}>Select Priority</Text>
-
-                        <TouchableOpacity
-                            style={[styles.priorityOption, { borderColor: '#FF3B30' }]}
-                            onPress={() => updatePriority('high')}
-                        >
-                            <Ionicons name="flag" size={24} color="#FF3B30" />
-                            <Text style={styles.priorityOptionText}>High Priority</Text>
-                        </TouchableOpacity>
-
-                        <TouchableOpacity
-                            style={[styles.priorityOption, { borderColor: '#FF9500' }]}
-                            onPress={() => updatePriority('medium')}
-                        >
-                            <Ionicons name="flag-outline" size={24} color="#FF9500" />
-                            <Text style={styles.priorityOptionText}>Medium Priority</Text>
-                        </TouchableOpacity>
-
-                        <TouchableOpacity
-                            style={[styles.priorityOption, { borderColor: '#34C759' }]}
-                            onPress={() => updatePriority('low')}
-                        >
-                            <Ionicons name="flag-outline" size={24} color="#34C759" />
-                            <Text style={styles.priorityOptionText}>Low Priority</Text>
-                        </TouchableOpacity>
-
-                        <TouchableOpacity
-                            style={styles.cancelButton}
-                            onPress={() => setPriorityModalVisible(false)}
-                        >
-                            <Text style={styles.cancelButtonText}>Cancel</Text>
-                        </TouchableOpacity>
+                        {(['high', 'medium', 'low'] as Priority[]).map((p) => (
+                            <TouchableOpacity
+                                key={p}
+                                style={[styles.priorityOption, taskPriority === p && { backgroundColor: getPriorityColor(p) + '10', borderColor: getPriorityColor(p) }]}
+                                onPress={() => updatePriority(p)}
+                            >
+                                <Ionicons name={p === 'high' ? "flag" : "flag-outline"} size={22} color={getPriorityColor(p)} />
+                                <Text style={[styles.priorityOptionText, { color: getPriorityColor(p) }]}>
+                                    {p.charAt(0).toUpperCase() + p.slice(1)} Priority
+                                </Text>
+                                {taskPriority === p && <Ionicons name="checkmark-circle" size={20} color={getPriorityColor(p)} />}
+                            </TouchableOpacity>
+                        ))}
                     </View>
                 </Pressable>
             </Modal>
-        </ScrollView>
+        </SafeAreaView>
     );
 }
 
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#F8F8F8',
-    },
-    keyboardAvoidingContainer: {
-        flex: 1,
+        backgroundColor: '#F0F2F5',
     },
     header: {
         backgroundColor: '#4A90E2',
-        paddingVertical: 20,
-        paddingHorizontal: 16,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 4,
-        elevation: 2,
-        paddingTop: 50
+        paddingHorizontal: 20,
+        paddingBottom: 25,
+        paddingTop: Platform.OS === 'android' ? 40 : 10,
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        borderBottomLeftRadius: 30,
+        borderBottomRightRadius: 30,
     },
     title: {
-        fontSize: 24,
-        fontWeight: 'bold',
+        fontSize: 28,
+        fontWeight: '800',
         color: 'white',
+        letterSpacing: 0.5,
     },
-    taskList: {
+    subtitle: {
+        fontSize: 14,
+        color: 'rgba(255, 255, 255, 0.8)',
+        marginTop: 4,
+        fontWeight: '500',
+    },
+    content: {
         flex: 1,
     },
     taskListContent: {
-        padding: 16,
-        paddingBottom: 100,
+        padding: 20,
+        paddingBottom: 20,
     },
     taskItem: {
         flexDirection: 'row',
         alignItems: 'center',
         backgroundColor: 'white',
-        borderRadius: 8,
+        borderRadius: 16,
         padding: 16,
         marginBottom: 12,
+        borderLeftWidth: 5,
         shadowColor: '#000',
-        shadowOffset: { width: 0, height: 1 },
+        shadowOffset: { width: 0, height: 2 },
         shadowOpacity: 0.05,
-        shadowRadius: 2,
-        elevation: 1,
+        shadowRadius: 8,
+        elevation: 3,
     },
     checkboxContainer: {
-        marginRight: 12,
+        marginRight: 15,
     },
     checkbox: {
-        width: 24,
-        height: 24,
-        borderRadius: 12,
+        width: 26,
+        height: 26,
+        borderRadius: 8,
         borderWidth: 2,
-        borderColor: '#4A90E2',
+        borderColor: '#E0E0E0',
         alignItems: 'center',
         justifyContent: 'center',
-    },
-    checkboxChecked: {
-        backgroundColor: '#4A90E2',
+        backgroundColor: '#FAFAFA',
     },
     taskContent: {
         flex: 1,
     },
     taskText: {
         fontSize: 16,
+        color: '#2D3436',
+        fontWeight: '600',
         marginBottom: 4,
     },
     taskTextCompleted: {
         textDecorationLine: 'line-through',
-        color: '#888888',
+        color: '#B2BEC3',
     },
     priorityIndicator: {
         flexDirection: 'row',
         alignItems: 'center',
     },
     priorityText: {
-        fontSize: 12,
+        fontSize: 11,
+        fontWeight: '700',
         marginLeft: 4,
-        textTransform: 'capitalize',
+        textTransform: 'uppercase',
+        letterSpacing: 0.5,
     },
     taskActions: {
         flexDirection: 'row',
-        alignItems: 'center',
     },
     actionButton: {
         padding: 8,
         marginLeft: 4,
     },
-    inputContainer: {
-        position: 'absolute',
-        bottom: 0,
-        left: 0,
-        right: 0,
-        padding: 16,
+    inputWrapper: {
+        padding: 20,
+        paddingBottom: Platform.OS === 'ios' ? 20 : 20,
         backgroundColor: 'white',
         borderTopWidth: 1,
-        borderTopColor: '#EEEEEE',
+        borderTopColor: '#F0F2F5',
     },
-    inputRow: {
+    inputContainer: {
         flexDirection: 'row',
         alignItems: 'center',
+        backgroundColor: '#F0F2F5',
+        borderRadius: 20,
+        paddingLeft: 20,
+        paddingRight: 8,
+        height: 60,
     },
     input: {
         flex: 1,
-        height: 46,
-        backgroundColor: '#F0F0F0',
-        borderRadius: 8,
-        paddingHorizontal: 16,
         fontSize: 16,
+        fontWeight: '500',
+        color: '#2D3436',
+        paddingVertical: 10,
     },
-    priorityButton: {
-        width: 46,
-        height: 46,
-        borderRadius: 8,
-        marginLeft: 8,
-        alignItems: 'center',
-        justifyContent: 'center',
+    priorityBadge: {
+        padding: 10,
+        borderRadius: 12,
+        marginHorizontal: 8,
     },
     addButton: {
-        marginLeft: 8,
         backgroundColor: '#4A90E2',
-        borderRadius: 8,
-        height: 46,
-        paddingHorizontal: 16,
+        width: 44,
+        height: 44,
+        borderRadius: 14,
         alignItems: 'center',
         justifyContent: 'center',
     },
-    addButtonText: {
-        color: 'white',
-        fontWeight: 'bold',
-        fontSize: 16,
+    addButtonDisabled: {
+        backgroundColor: '#B2BEC3',
     },
     emptyContainer: {
         alignItems: 'center',
         justifyContent: 'center',
-        paddingVertical: 60,
+        marginTop: 100,
     },
     emptyText: {
-        fontSize: 18,
-        fontWeight: 'bold',
-        color: '#888888',
-        marginTop: 16,
+        fontSize: 20,
+        fontWeight: '700',
+        color: '#636E72',
+        marginTop: 20,
     },
     emptySubtext: {
         fontSize: 14,
-        color: '#AAAAAA',
+        color: '#B2BEC3',
         marginTop: 8,
     },
     modalOverlay: {
         flex: 1,
-        backgroundColor: 'rgba(0, 0, 0, 0.5)',
+        backgroundColor: 'rgba(0,0,0,0.4)',
         justifyContent: 'flex-end',
     },
     modalContent: {
         backgroundColor: 'white',
-        borderTopLeftRadius: 16,
-        borderTopRightRadius: 16,
-        padding: 20,
+        borderTopLeftRadius: 30,
+        borderTopRightRadius: 30,
+        padding: 24,
+        paddingBottom: 40,
     },
     modalTitle: {
-        fontSize: 18,
-        fontWeight: 'bold',
-        marginBottom: 16,
+        fontSize: 20,
+        fontWeight: '800',
+        color: '#2D3436',
+        marginBottom: 20,
         textAlign: 'center',
     },
     priorityOption: {
         flexDirection: 'row',
         alignItems: 'center',
-        padding: 16,
+        padding: 18,
+        borderRadius: 16,
+        marginBottom: 10,
         borderWidth: 1,
-        borderRadius: 8,
-        marginBottom: 12,
+        borderColor: '#F0F2F5',
     },
     priorityOptionText: {
+        flex: 1,
         fontSize: 16,
-        marginLeft: 12,
-    },
-    cancelButton: {
-        padding: 16,
-        alignItems: 'center',
-        marginTop: 8,
-    },
-    cancelButtonText: {
-        fontSize: 16,
-        color: '#4A90E2',
-        fontWeight: 'bold',
+        fontWeight: '700',
+        marginLeft: 15,
     },
 });

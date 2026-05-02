@@ -2,6 +2,7 @@ import { ConvexProvider, ConvexReactClient } from 'convex/react';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { StyleSheet } from 'react-native';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { Toaster } from 'sonner-native';
 
@@ -9,20 +10,22 @@ const convex = new ConvexReactClient(process.env.EXPO_PUBLIC_CONVEX_URL || "");
 
 export default function App() {
   return (
-    <ConvexProvider client={convex}>
-      <SafeAreaProvider style={styles.container}>
-        <Toaster />
-        <Stack
-          screenOptions={{
-            headerShown: false
-          }}
-          initialRouteName='index'>
-          <Stack.Screen name="index" />
-          <Stack.Screen name="+not-found" />
-        </Stack>
-        <StatusBar style="auto" />
-      </SafeAreaProvider>
-    </ConvexProvider>
+    <GestureHandlerRootView style={styles.container}>
+      <ConvexProvider client={convex}>
+        <SafeAreaProvider style={styles.container}>
+          <Toaster />
+          <Stack
+            screenOptions={{
+              headerShown: false
+            }}
+            initialRouteName='index'>
+            <Stack.Screen name="index" />
+            <Stack.Screen name="+not-found" />
+          </Stack>
+          <StatusBar style="auto" />
+        </SafeAreaProvider>
+      </ConvexProvider>
+    </GestureHandlerRootView>
   );
 }
 
